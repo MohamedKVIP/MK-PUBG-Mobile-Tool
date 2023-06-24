@@ -41,6 +41,10 @@ This option allows you to optimize your Gameloop emulator and PC for better perf
 
 This option allows you to create a desktop shortcut for PUBG Mobile, making it easier for you to access the game.
 
+### DNS Changer
+
+Change your DNS settings effortlessly with the DNS Changer feature. Enjoy a better internet experience with just a few clicks.
+
 Usage
 -----
 
