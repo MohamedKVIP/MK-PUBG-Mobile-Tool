@@ -1,7 +1,18 @@
+<div align="center">
+
+<h1>MK PUBG Mobile Tool</h1>
+An easy-to-use GFX App For Gameloop (PUBG Mobile)<br><br>
+
+
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Kamal-blue)](https://github.com/MohamedKVIP) [![GitHub Release Date](https://img.shields.io/github/release-date/MohamedKVIP/MK-PUBG-Mobile-Tool)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) [![GitHub all releases](https://img.shields.io/github/downloads/MohamedKVIP/MK-PUBG-Mobile-Tool/total?color=brightgreen)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) [![GitHub issues](https://img.shields.io/github/issues-raw/MohamedKVIP/MK-PUBG-Mobile-Tool)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/issues) ![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FMohamedKVIP%2FMK-PUBG-Mobile-Tool&countColor=%2337d67a&style=flat)
 
-# MK-PUBG-Mobile-Tool
 
+**English** | [**العربية**](./README.ar.md)
+
+</div>
+
+------
+<br>
 MK PUBG Mobile Tool is a professional utility tool that enables you to optimize your PUBG Mobile gaming experience on Gameloop emulator on PC. This tool supports all versions of PUBG Mobile, including:
 
 *   PUBG Mobile Global
@@ -25,8 +36,12 @@ With this option, you can change the graphics settings of PUBG Mobile on Gameloo
 
 You can also choose between:
 
-*   60 FPS
-*   90 FPS
+*   Low
+*   Medium
+*   High
+*   Ultra
+*   Extreme (60 FPS)
+*   **90 FPS**
 
 ### Optimize Gameloop & PC
 
@@ -45,15 +60,19 @@ This option allows you to create a desktop shortcut for PUBG Mobile, making it e
 
 Change your DNS settings effortlessly with the DNS Changer feature. Enjoy a better internet experience with just a few clicks.
 
+### IPad View
+
+Change resolution settings to simulate an iPad-like display with one click and get game layout.
+
 Usage
 -----
 
-To use this tool, simply download the app from the [releases page](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) and run it on your PC. Follow the on-screen instructions to change the graphics settings, optimize Gameloop and PC, or create a desktop shortcut for PUBG Mobile.
+To use this tool, simply download the app from the [releases page (Download)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) and run it on your PC. Follow the on-screen instructions to change the graphics settings, optimize Gameloop and PC, or create a desktop shortcut for PUBG Mobile.
 
 Screenshots
 -----------
 
-Here's a screenshot of the MK PUBG Mobile Tool in action:
+Here's a screenshot of the MK PUBG Mobile Tool:
 
 ![MK PUBG Mobile Tool screenshot](./images/mk-pubg-mobile-tool.png)
 ![MK PUBG Mobile Tool Optimize screenshot](./images/mk-pubg-mobile-tool-optimize.png)
