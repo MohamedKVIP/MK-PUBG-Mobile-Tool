@@ -85,6 +85,7 @@
 
 ![صورة شاشة أداة MK PUBG Mobile](./images/mk-pubg-mobile-tool.png)
 ![صورة شاشة تحسين أداة MK PUBG Mobile](./images/mk-pubg-mobile-tool-optimize.png)
+![ حول صورة شاشة أداة  MK PUBG Mobile](./images/mk-pubg-mobile-tool-about.png)
 
 <br>
 <h2>ملاحظة</h2>
