@@ -67,7 +67,19 @@ Change resolution settings to simulate an iPad-like display with one click and g
 Usage
 -----
 
+There is 2 ways to run the tool
+### 1- Download and Run
 To use this tool, simply download the app from the [releases page (Download)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) and run it on your PC. Follow the on-screen instructions to change the graphics settings, optimize Gameloop and PC, or create a desktop shortcut for PUBG Mobile.
+
+### 2- Python
+Download the source code, then install the necessary dependencies to run it:
+```shell
+pip install -r requirements.txt
+```
+After the installation is complete, run the tool:
+```shell
+python main.py
+```
 
 Screenshots
 -----------

@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="Graphics">
+        <file>submit.png</file>
+        <file>menu_checked.png</file>
+        <file>bg.png</file>
+        <file>fps.png</file>
+        <file>fps_ckecked.png</file>
+        <file>Classic.png</file>
+        <file>Movie.png</file>
+        <file>Realistic.png</file>
+        <file>Soft.png</file>
+        <file>Colorful.png</file>
+        <file>checked.png</file>
+    </qresource>
+</RCC>
