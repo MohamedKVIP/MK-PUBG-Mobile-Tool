@@ -12,7 +12,7 @@ from src.ui_functions import Window, QtWidgets
 from src.update import UpdateWindow
 
 APP_NAME = "MK PUBG Mobile Tool"
-APP_VERSION = "v1.0.4"
+APP_VERSION = "v1.0.5"
 FULL_APP_NAME = f"{APP_NAME} {APP_VERSION}"
 ctypes.windll.kernel32.SetConsoleTitleW(FULL_APP_NAME)
 
