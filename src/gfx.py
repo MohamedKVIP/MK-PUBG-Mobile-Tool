@@ -55,7 +55,7 @@ class ConnectWorkerThread(QThread):
         if not self.app.adb_enabled:
             self.ui.connect_gameloop_btn.setChecked(False)
             self.ui.connect_gameloop_btn.setText("Connect to Gameloop")
-            self.app.show_status_message("Restart GameLoop and Try Again.", 6)
+            self.app.show_status_message("Restart GameLoop and Try Again.")
             self.task_completed.emit()
             return
 
@@ -64,7 +64,7 @@ class ConnectWorkerThread(QThread):
         if not self.app.adb_work:
             self.ui.connect_gameloop_btn.setChecked(False)
             self.ui.connect_gameloop_btn.setText("Connect to Gameloop")
-            self.app.show_status_message("Gameloop not working.", 3)
+            self.app.show_status_message("Gameloop not working.")
             self.task_completed.emit()
             return
 
@@ -72,7 +72,7 @@ class ConnectWorkerThread(QThread):
         num_found = len(self.app.PUBG_Found)
 
         if num_found == 0:
-            self.app.show_status_message("You don't have any PUBG Mobile version installed", 3)
+            self.app.show_status_message("You don't have any PUBG Mobile version installed")
             self.task_completed.emit()
             return
         elif num_found > 1:

@@ -17,7 +17,7 @@ import wmi
 from PyQt5.QtCore import QSettings
 from win32api import EnumDisplayDevices, EnumDisplaySettings
 from win32com.client import Dispatch
-
+from . import setup_logger
 
 class Settings:
     def __init__(self):
@@ -29,6 +29,7 @@ class Settings:
             "com.rekoo.pubgm": "PUBG Mobile TW",
             "com.pubg.krmobile": "PUBG Mobile KR",
             "com.pubg.imobile": "Battlegrounds Mobile India"}
+        self.logger = setup_logger('error_logger', 'error.log')
 
     @staticmethod
     def kill_adb():
@@ -84,166 +85,6 @@ class Registry(Settings):
 
 class Optimizer(Registry):
 
-    @staticmethod
-    def kill_gameloop():
-        """
-        Kills a list of processes related to the gameloop.
-
-        Returns:
-            - True if at least one process was killed.
-            - False if no process was killed.
-        """
-        # List of processes to be killed
-        processes_to_kill = [
-            'aow_exe.exe',  # Process 1
-            'AndroidEmulatorEn.exe',  # Process 2
-            'AndroidEmulator.exe',  # Process 3
-            'AndroidEmulatorEx.exe',  # Process 4
-            'TBSWebRenderer.exe',  # Process 5
-            'syzs_dl_svr.exe',  # Process 6
-            'AppMarket.exe',  # Process 7
-            'QMEmulatorService.exe',  # Process 8
-            'RuntimeBroker.exe',  # Process 9
-            'GameLoader.exe',  # Process 10
-            'TSettingCenter.exe',  # Process 11
-            'Auxillary.exe',  # Process 12
-            'TP3Helper.exe',  # Process 13
-            'tp3helper.dat',  # Process 14
-            'GameDownload.exe'  # Process 15
-        ]
-
-        # Counter to track number of processes killed
-        processes_killed = 0
-
-        # Loop through each process in the list and kill them
-        for process in processes_to_kill:
-            result = subprocess.run(['taskkill', '/F', '/IM', process, '/T'], stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL)
-            if result.returncode == 0:
-                processes_killed += 1
-
-        # If at least one process was killed, return True; otherwise, return False
-        return processes_killed >= 1
-
-    def add_to_windows_defender_exclusion(self):
-        """
-        Adds the directory of the game loop to the Windows Defender exclusion list.
-        """
-        gameloop_path = os.path.dirname(self.get_local_reg("InstallPath"))
-        command = ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{gameloop_path}' -Force"]
-        subprocess.call(command)
-
-    @staticmethod
-    def change_dns_servers(dns_servers):
-        """
-        Change the DNS servers for all network adapters.
-        """
-        pythoncom.CoInitialize()  # Initialize the COM library
-
-        wmi_api = wmi.WMI()  # Create a WMI API object
-
-        # Retrieve all network adapters
-        adapters = wmi_api.Win32_NetworkAdapterConfiguration(IPEnabled=True)
-
-        success = all(adapter.SetDNSServerSearchOrder(dns_servers)[0] == 0 for adapter in adapters)
-
-        # Flush DNS cache
-        subprocess.run(['ipconfig', '/flushdns'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-
-        return success
-
-    def optimize_for_nvidia(self):
-        nvidia_profile_path = self.resource_path("assets/mk.nip")
-
-        def change_nvidia_profile():
-            gameloop_ui_path = self.get_local_reg("InstallPath", path="UI").replace("\\", "/")
-
-            tree = ET.parse(nvidia_profile_path, parser=ET.XMLParser(encoding='utf-16'))
-            root = tree.getroot()
-
-            profilename = root.find('.//ProfileName')
-            executeables = root.find('.//Executeables')
-            path_elem = executeables.find('string')
-
-            path_elem.text = f"{gameloop_ui_path}/androidemulatoren.exe".lower()
-            profilename.text = path_elem.text.replace('/', '\\')
-
-            gpu = GPUtil.getGPUs()[0] if GPUtil.getGPUs() else None
-
-            filter_setting = tree.find(".//ProfileSetting[SettingNameInfo='Enable FXAA']")
-            if gpu and gpu.memoryTotal / 1024 < 3:
-                filter_setting.find('SettingValue').text = '0'
-            else:
-                filter_setting.find('SettingValue').text = '1'
-
-            tree.write(nvidia_profile_path, encoding='utf-16')
-
-        def is_gpu_nvidia() -> bool:
-            try:
-                gpu_provider = wmi.WMI().Win32_VideoController()[0].AdapterCompatibility
-                return "NVIDIA" in gpu_provider
-            except:
-                return False
-
-        if is_gpu_nvidia():
-            change_nvidia_profile()
-
-            args = [
-                self.resource_path("assets/nvidiaProfileInspector.exe"),
-                nvidia_profile_path,
-                "-silent"
-            ]
-            subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    def optimize_gameloop_registry(self):
-        install_path = self.get_local_reg("InstallPath", path="UI")
-        registry_keys = [
-            'AndroidEmulator.exe',
-            'AndroidEmulatorEn.exe',
-            'AndroidEmulatorEx.exe',
-            'aow_exe.exe',
-        ]
-        base_key = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
-        value_name = 'CpuPriorityClass'
-        value_data = '3'
-
-        for key in registry_keys:
-            full_key = fr"{base_key}\{key}\PerfOptions"
-            command = [
-                'reg', 'ADD', full_key,
-                '/v', value_name,
-                '/t', 'REG_DWORD',
-                '/d', value_data,
-                '/f'
-            ]
-            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        registry_entries = [
-            (
-                r'HKEY_CURRENT_USER\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers',
-                '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
-            ),
-            (
-                r'HKEY_CURRENT_USER\SOFTWARE\Microsoft\DirectX\UserGpuPreferences',
-                'GpuPreference=2;'
-            )
-        ]
-
-        commands = [
-            [
-                'reg', 'ADD', registry_key,
-                '/v', fr'{install_path}\{key}',
-                '/t', 'REG_SZ',
-                '/d', value,
-                '/f'
-            ]
-            for registry_key, value in registry_entries
-            for key in registry_keys
-        ]
-
-        for command in commands:
-            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
     def temp_cleaner(self):
         """
         Cleans temporary files and directories.
@@ -252,40 +93,34 @@ class Optimizer(Registry):
             bool: True if the function successfully cleans the temporary files and directories.
         """
         base_path = getattr(sys, '_MEIPASS', os.path.abspath('.'))
-        gameloop_ui_path = self.get_local_reg('InstallPath', path='UI')
-
-        # Clear temporary files
-        temp_path = tempfile.gettempdir()
-        for folder in os.listdir(temp_path):
-            folder_path = os.path.join(temp_path, folder)
-            if folder_path == base_path:
-                continue
-            if os.path.isdir(folder_path):
-                shutil.rmtree(folder_path, ignore_errors=True)
-            else:
-                try:
-                    os.remove(folder_path)
-                except:
-                    pass
 
         def clear_files(directory):
-            for file_name in os.listdir(directory):
-                file_path = os.path.join(directory, file_name)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                except Exception:
-                    pass
+            try:
+                for root, dirs, files in os.walk(directory):
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        shutil.rmtree(os.path.join(root, name))
+            except Exception:
+                pass
 
-        # Clear Windows Temp folder
+        try:
+            for folder in os.listdir(tempfile.gettempdir()):
+                folder_path = os.path.join(tempfile.gettempdir(), folder)
+                if folder_path != base_path:
+                    if os.path.isdir(folder_path):
+                        shutil.rmtree(folder_path, ignore_errors=True)
+                    else:
+                        try:
+                            os.remove(folder_path)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
         clear_files(r"C:\Windows\Temp")
-
-        # Clear prefetch files
         clear_files(os.path.expandvars(r'%windir%\Prefetch'))
-
-        # Clear Gameloop ShaderCache files
+        gameloop_ui_path = self.get_local_reg('InstallPath', path='UI')
         clear_files(os.path.join(gameloop_ui_path, 'ShaderCache'))
 
         return True
@@ -294,6 +129,7 @@ class Optimizer(Registry):
         """
         Generates the game loop settings based on the system's hardware specifications.
         """
+
         def make_scale(value, low=False):
             for version_key in self.pubg_versions.keys():
                 content_scale_key = f"{version_key}_ContentScale"
@@ -375,7 +211,173 @@ class Optimizer(Registry):
         self.set_dword("VMMemorySizeInMB", ram_value)
         self.set_dword("VMCpuCount", cpu_value)
 
-        # print(f"[{self.G}#{self.R_A}] The smart settings have been applied {self.G}successfully{self.R_A}")
+    def add_to_windows_defender_exclusion(self):
+        """
+        Adds the directory of the game loop to the Windows Defender exclusion list.
+        """
+        try:
+            gameloop_path = os.path.dirname(self.get_local_reg("InstallPath"))
+            command = ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{gameloop_path}' -Force"]
+            subprocess.call(command)
+        except Exception:
+            return False
+        return True
+
+    def optimize_gameloop_registry(self):
+        try:
+            install_path = self.get_local_reg("InstallPath", path="UI")
+            registry_keys = [
+                'AndroidEmulator.exe',
+                'AndroidEmulatorEn.exe',
+                'AndroidEmulatorEx.exe',
+                'aow_exe.exe',
+            ]
+            base_key = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
+            value_name = 'CpuPriorityClass'
+            value_data = '3'
+
+            for key in registry_keys:
+                full_key = fr"{base_key}\{key}\PerfOptions"
+                command = [
+                    'reg', 'ADD', full_key,
+                    '/v', value_name,
+                    '/t', 'REG_DWORD',
+                    '/d', value_data,
+                    '/f'
+                ]
+                subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            registry_entries = [
+                (
+                    r'HKEY_CURRENT_USER\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers',
+                    '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
+                ),
+                (
+                    r'HKEY_CURRENT_USER\SOFTWARE\Microsoft\DirectX\UserGpuPreferences',
+                    'GpuPreference=2;'
+                )
+            ]
+
+            commands = [
+                [
+                    'reg', 'ADD', registry_key,
+                    '/v', fr'{install_path}\{key}',
+                    '/t', 'REG_SZ',
+                    '/d', value,
+                    '/f'
+                ]
+                for registry_key, value in registry_entries
+                for key in registry_keys
+            ]
+
+            for command in commands:
+                subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+
+    def optimize_for_nvidia(self):
+        def change_nvidia_profile():
+            gameloop_ui_path = self.get_local_reg("InstallPath", path="UI").replace("\\", "/")
+
+            tree = ET.parse(nvidia_profile_path, parser=ET.XMLParser(encoding='utf-16'))
+            root = tree.getroot()
+
+            profilename = root.find('.//ProfileName')
+            executeables = root.find('.//Executeables')
+            path_elem = executeables.find('string')
+
+            path_elem.text = f"{gameloop_ui_path}/androidemulatoren.exe".lower()
+            profilename.text = path_elem.text.replace('/', '\\')
+
+            gpu = GPUtil.getGPUs()[0] if GPUtil.getGPUs() else None
+
+            filter_setting = tree.find(".//ProfileSetting[SettingNameInfo='Enable FXAA']")
+            if gpu and gpu.memoryTotal / 1024 < 3:
+                filter_setting.find('SettingValue').text = '0'
+            else:
+                filter_setting.find('SettingValue').text = '1'
+
+            tree.write(nvidia_profile_path, encoding='utf-16')
+        try:
+            nvidia_profile_path = self.resource_path("assets/mk.nip")
+            def is_gpu_nvidia() -> bool:
+                try:
+                    gpu_provider = wmi.WMI().Win32_VideoController()[0].AdapterCompatibility
+                    return "NVIDIA" in gpu_provider
+                except:
+                    return False
+
+            if is_gpu_nvidia():
+                change_nvidia_profile()
+
+                args = [
+                    self.resource_path("assets/nvidiaProfileInspector.exe"),
+                    nvidia_profile_path,
+                    "-silent"
+                ]
+                subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+
+    @staticmethod
+    def kill_gameloop():
+        """
+        Kills a list of processes related to the gameloop.
+
+        Returns:
+            - True if at least one process was killed.
+            - False if no process was killed.
+        """
+        # List of processes to be killed
+        processes_to_kill = [
+            'aow_exe.exe',  # Process 1
+            'AndroidEmulatorEn.exe',  # Process 2
+            'AndroidEmulator.exe',  # Process 3
+            'AndroidEmulatorEx.exe',  # Process 4
+            'TBSWebRenderer.exe',  # Process 5
+            'syzs_dl_svr.exe',  # Process 6
+            'AppMarket.exe',  # Process 7
+            'QMEmulatorService.exe',  # Process 8
+            'RuntimeBroker.exe',  # Process 9
+            'GameLoader.exe',  # Process 10
+            'TSettingCenter.exe',  # Process 11
+            'Auxillary.exe',  # Process 12
+            'TP3Helper.exe',  # Process 13
+            'tp3helper.dat',  # Process 14
+            'GameDownload.exe'  # Process 15
+        ]
+
+        # Counter to track number of processes killed
+        processes_killed = 0
+
+        # Loop through each process in the list and kill them
+        for process in processes_to_kill:
+            result = subprocess.run(['taskkill', '/F', '/IM', process, '/T'], stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL)
+            if result.returncode == 0:
+                processes_killed += 1
+
+        # If at least one process was killed, return True; otherwise, return False
+        return processes_killed >= 1
+
+    @staticmethod
+    def change_dns_servers(dns_servers):
+        """
+        Change the DNS servers for all network adapters.
+        """
+        pythoncom.CoInitialize()  # Initialize the COM library
+
+        wmi_api = wmi.WMI()  # Create a WMI API object
+
+        # Retrieve all network adapters
+        adapters = wmi_api.Win32_NetworkAdapterConfiguration(IPEnabled=True)
+
+        success = all(adapter.SetDNSServerSearchOrder(dns_servers)[0] == 0 for adapter in adapters)
+
+        # Flush DNS cache
+        subprocess.run(['ipconfig', '/flushdns'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+        return success
 
     def ipad_layout_settings(self, reset=False):
         """
@@ -393,29 +395,218 @@ class Optimizer(Registry):
             """
             Modify the layout of the XML file based on the edited values.
             """
+            def update_xml(xml_string, pubg_version, query, item_name, enable_switch, new_points, main_value=None):
+                root = ET.fromstring(f'<root>{xml_string}</root>')
+                for item_elem in root.findall(f".//Item[@ApkName='{pubg_version}'].//KeyMapMode"):
+                    name_attr = item_elem.get("Name")
+                    if name_attr == query:
+                        key_mapping_ex = item_elem.find(f'.//KeyMappingEx[@ItemName="{item_name}"]')
+                        key_mapping = item_elem.find(f'.//KeyMapping[@ItemName="{item_name}"]')
+                        if key_mapping_ex is not None:
+                            if key_mapping_ex.findall(f'.//SwitchOperation[@EnablePositionSwitch]') != []:
+                                old_x, old_x2 = None, None
+                                for (new_y1, new_y2), point_val in zip(new_points, key_mapping_ex.findall(
+                                        f'.//SwitchOperation[@Description="{enable_switch}"]')):
+                                    texture, points = point_val.get(f'EnablePositionSwitch').split(":")
+                                    x1, y1, x2, y2 = points.split(",")
+                                    old_x = x1 if old_x is None else old_x
+                                    old_x2 = x2 if old_x2 is None else old_x2
+                                    point_val.set('EnablePositionSwitch',
+                                                  f'{texture}:{old_x},{new_y1},{old_x2},{new_y2}')
+                            else:
+                                for _ in key_mapping_ex.findall(f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'):
+                                    if len(key_mapping_ex.findall(".//Point") or key_mapping_ex.findall(
+                                            ".//DriveKey") or key_mapping_ex.findall(".//SwitchOperation")) < len(
+                                        new_points):
+                                        zz = key_mapping_ex.findall(".//Point")
+                                        for _ in range(len(new_points) - len(zz)):
+                                            zz.append(ET.Element("Point"))
+                                    else:
+                                        zz = key_mapping_ex.findall(".//Point")
+
+                                    for (x, y), point_val in zip(new_points, (
+                                            zz or key_mapping_ex.findall(".//DriveKey") or key_mapping_ex.findall(
+                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'))):
+                                        if main_value is not None:
+                                            if item_name == "Click with Scroll Wheel" and enable_switch == "Backpage":
+                                                key_mapping_ex.set('Click_X', str(float(x) + 0.1))
+                                                key_mapping_ex.set('Click_Y', str(y))
+
+                                            key_mapping_ex.set('Point_X', str(x))
+                                            key_mapping_ex.set('Point_Y', str(y))
+
+                                        if point_val.get('Point_X') is not None:
+                                            point_val.set('Point_X', str(x))
+                                            point_val.set('Point_Y', str(y))
+                        elif key_mapping is not None:
+                            x, y = new_points
+                            if (main_value and key_mapping.get('Point_X')) is not None:
+                                key_mapping.set('Point_X', str(x))
+                                key_mapping.set('Point_Y', str(y))
+
+                            if isinstance(new_points, list):
+                                for (x, y), point_element in zip(new_points, key_mapping.findall(
+                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]')):
+                                    point_element.set('Point_X', str(x))
+                                    point_element.set('Point_Y', str(y))
+                            else:
+                                for point_element in key_mapping.findall(
+                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'):
+                                    point_element.set('Point_X', str(x))
+                                    point_element.set('Point_Y', str(y))
+                modified_xml_code = ET.tostring(root, encoding='utf-8').decode('utf-8')
+                return modified_xml_code.replace("<root>", "").replace("</root>", "")
+
             ipad_keymap_values = {
                 "Smart 720P": {
-                    "SwimUp": {"Space": ("0.832831", "0.691767")},
-                    "SwimmingUp": {"Space": ("0.832831", "0.691767")},
-                    "Whistle": {"Space": ("0.907380", "0.651606"), "G": ("0.952560", "0.767068")},
-                    "Moto": {"E": ("0.801205", "0.634538"), "Q": ("0.710090", "0.639558")},
-                    "Moto2": {"E": ("0.801205", "0.634538"), "Q": ("0.710090", "0.639558")},
-                    "SetUp": {"Y": (("0.717620", "0.215863"), ("0.768072", "0.215863")),
-                              "T": (("0.707078", "0.114458"), ("0.763554", "0.114458"))}
+                    "B": {"Reload": [("0.537234", "0.880567"), ("0.406535", "0.880567")]},  # Main
+                    "3": {"Jump": ("0.613222", "0.880567"), "GetOutCar": ("0.613222", "0.880567")},  # Main
+                    "F3": {"SetUp": [("0.768997", "0.163968"), ("0.896657", "0.270243")]},
+                    "F2": {"SetUp": [("0.781155", "0.144737"), ("0.960486", "0.270243")]},  # Main 2 >> 1
+                    "Space": {"Jump": ("0.962006", "0.762146"), "Climb": ("0.962006", "0.762146"),
+                              "Whistle": [("0.911094", "0.660931"), ("0.063070", "0.747976")],
+                              "DriveMode1|DriveSpeed": ("0.063070", "0.747976"),
+                              "DriveMode1|DriveSpeedPress": ("0.063070", "0.747976"),
+                              "SwimUp": ("0.835106", "0.701417"), "SwimmingUp": ("0.835106", "0.701417"), },
+                    "Shift": {"DriveMode1|DriveSpeed": ("0.076748", "0.555668"),
+                              "DriveMode1|DriveSpeedPress": ("0.076748", "0.555668")},
+                    "Right Click": {"Sniper": ("0.962006", "0.638664"), "Sniper2": ("0.962006", "0.638664"),
+                                    "Reload": ("0.962006", "0.638664")},  # Main
+                    "Z": {"Fall": ("0.942249", "0.949393"), "CancelFall": ("0.942249", "0.949393")},  # Main
+                    "E": {"Sideways": ("0.221884", "0.522267"), "SidewaysCancel": ("0.221884", "0.522267"),
+                          "Moto": ("0.806991", "0.637652"), "Moto2": ("0.806991", "0.637652")},  # Main
+                    "Q": {"Sideways": ("0.141337", "0.520243"), "SidewaysCancel": ("0.141337", "0.520243"),
+                          "Moto": ("0.713526", "0.635628"), "Moto2": ("0.713526", "0.635628")},
+                    "Y": {"SetUp": [("0.794833", "0.161943"), ("0.753040", "0.161943"), ("0.844985", "0.157895")]},
+                    "T": {"SetUp": [("0.780395", "0.092105"), ("0.732523", "0.092105"), ("0.847264", "0.097166")]},
+                    "Alt": {"Eye": [("0.776596", "0.232794")]},
+                    "Drive": {"DriveMode1": (("0.673252", "0.765182"), ("0.834347", "0.765182"),
+                                             ("0.164894", "0.644737"), ("0.164894", "0.826923"))},  # ADWS
+                    "F": {"Pickup|NineBlock": ("0.144377", "0.683198"), "Pickup|SixBlock": ("0.341945", "0.682186"),
+                          "Pickup|XBtn": ("0.319909", "0.281377"), "Pickup": ("0.658055", "0.281377"),
+                          "Pickup|SkyBoxFlag|XBtn": ("0.144377", "0.683198")},
+                    "G": {"Pickup|NineBlock": ("0.303191", "0.683198"), "Pickup|SixBlock": ("0.484043", "0.682186"),
+                          "Pickup|XBtn": ("0.319909", "0.354251"), "Pickup": ("0.658055", "0.354251"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.303191", "0.683198"),
+                          "Whistle": ("0.954407", "0.771255"),
+                          "OutCarShoot": ("0.954407", "0.683198"), "OutCarShoot2": ("0.954407", "0.771255")},
+                    "H": {"Pickup|NineBlock": ("0.144377", "0.769231"), "Pickup|SixBlock": ("0.649696", "0.682186"),
+                          "Pickup|XBtn": ("0.319909", "0.429150"), "Pickup": ("0.658055", "0.429150"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.144377", "0.769231")},
+                    "Slide with Scroll Wheel": {"Pickup": [("0.658055", "0.374251")],
+                                                "Pickup|XBtn": [("0.319909", "0.374251")],
+                                                "Pickup|XBtn|SkyBoxFlag": [("0.319909", "0.723198")],
+                                                "Pickup|SkyBoxFlag": [("0.658055", "0.723198")]},
+                    "4": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "5": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "6": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "X": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "7": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "8": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "9": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
+                    "0": {"GrenadeArrowUp": [("0.863750", "0.926667"), ("0.202847", "0.863750")]},
                 },
                 "Smart 1080P": {
-                    "SwimUp": {"Space": ("0.879518", "0.759036")},
-                    "SwimmingUp": {"Space": ("0.879518", "0.759036")},
-                    "Whistle": {"Space": ("0.932982", "0.748996"), "G": ("0.963855", "0.828313")},
-                    "Moto": {"E": ("0.854669", "0.728916"), "Q": ("0.790663", "0.730924")},
-                    "Moto2": {"E": ("0.854669", "0.728916"), "Q": ("0.790663", "0.730924")}
+                    "B": {"Reload": [("0.542969", "0.910751"), ("0.437500", "0.910751")]},  # Main
+                    "3": {"Jump": ("0.584347", "0.913793"), "GetOutCar": ("0.584347", "0.913793")},  # Main
+                    "F3": {"SetUp": [("0.838146", "0.100406"), ("0.924012", "0.193712")]},
+                    "F2": {"SetUp": [("0.838146", "0.100406"), ("0.971884", "0.193712")]},  # Main 2 >> 1
+                    "Space": {"Jump": ("0.969605", "0.834686"), "Climb": ("0.969605", "0.834686"),
+                              "Whistle": [("0.934650", "0.764706"), ("0.049392", "0.823529")],
+                              "DriveMode1|DriveSpeed": ("0.049392", "0.823529"),
+                              "DriveMode1|DriveSpeedPress": ("0.049392", "0.823529"),
+                              "SwimUp": ("0.879518", "0.759036"), "SwimmingUp": ("0.879518", "0.759036"), },
+                    "Shift": {"DriveMode1|DriveSpeed": ("0.053951", "0.683570"),
+                              "DriveMode1|DriveSpeedPress": ("0.053951", "0.683570")},
+                    "Right Click": {"Sniper": ("0.971125", "0.746450"), "Sniper2": ("0.971125", "0.746450"),
+                                    "Reload": ("0.971125", "0.746450")},  # Main
+                    "Z": {"Fall": ("0.961246", "0.967546"), "CancelFall": ("0.961246", "0.967546")},  # Main
+                    "E": {"Sideways": ("0.155775", "0.658215"), "SidewaysCancel": ("0.155775", "0.658215"),
+                          "Moto": ("0.857903", "0.738337"), "Moto2": ("0.857903", "0.738337")},  # Main
+                    "Q": {"Sideways": ("0.101064", "0.656187"), "SidewaysCancel": ("0.101064", "0.656187"),
+                          "Moto": ("0.791793", "0.736308"), "Moto2": ("0.791793", "0.736308")},
+                    "Y": {"SetUp": [("0.852584", "0.118661"), ("0.823708", "0.118661"), ("0.892097", "0.108519")]},
+                    "T": {"SetUp": [("0.841185", "0.064909"), ("0.809271", "0.064909"), ("0.888298", "0.073022")]},
+                    "Alt": {"Eye": [("0.840426", "0.166329")]},
+                    "Drive": {"DriveMode1": (("0.764438", "0.836714"), ("0.881459", "0.836714"),
+                                             ("0.116261", "0.752535"), ("0.116261", "0.883367"))},  # ADWS
+                    "F": {"Pickup|NineBlock": ("0.353906", "0.763889"), "Pickup|SixBlock": ("0.482031", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.199393"), "Pickup": ("0.721094", "0.199393"),
+                          "Pickup|SkyBoxFlag|XBtn": ("0.353906", "0.763889")},
+                    "G": {"Pickup|NineBlock": ("0.732812", "0.767206"), "Pickup|SixBlock": ("0.607812", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.251616"), "Pickup": ("0.721094", "0.251616"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.476563", "0.763889"),
+                          "Whistle": ("0.966565", "0.835700"),
+                          "OutCarShoot": ("0.965625", "0.839167"), "OutCarShoot2": ("0.965625", "0.839167")},
+                    "H": {"Pickup|NineBlock": ("0.353906", "0.847761"), "Pickup|SixBlock": ("0.732031", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.303839"), "Pickup": ("0.721094", "0.303839"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.353906", "0.847761")},
+                    "1": {"Jump": ("0.453906", "0.947333"), "Climb": ("0.453906", "0.947333"),
+                          "GetOutCar": ("0.453906", "0.947333")},
+                    "2": {"Jump": ("0.544531", "0.947333"), "Climb": ("0.544531", "0.947333"),
+                          "GetOutCar": ("0.544531", "0.9472333")},
+                    "Click with Scroll Wheel": {"Backpage": [("0.453906", "0.947333")]},
+                    "Slide with Scroll Wheel": {"Pickup": [("0.739844", "0.199393")],
+                                                "Pickup|XBtn": [("0.467187", "0.199393")]},
+                    "4": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "5": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "6": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "X": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "7": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "8": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "9": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "0": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
                 },
                 "Smart 2K": {
-                    "SwimUp": {"Space": ("0.879518", "0.759036")},
-                    "SwimmingUp": {"Space": ("0.879518", "0.759036")},
-                    "Whistle": {"Space": ("0.932982", "0.748996"), "G": ("0.963855", "0.828313")},
-                    "Moto": {"E": ("0.854669", "0.728916"), "Q": ("0.790663", "0.730924")},
-                    "Moto2": {"E": ("0.854669", "0.728916"), "Q": ("0.790663", "0.730924")}
+                    "B": {"Reload": [("0.542969", "0.910751"), ("0.437500", "0.910751")]},  # Main
+                    "3": {"Jump": ("0.584347", "0.913793"), "GetOutCar": ("0.584347", "0.913793")},  # Main
+                    "F3": {"SetUp": [("0.838146", "0.100406"), ("0.924012", "0.193712")]},
+                    "F2": {"SetUp": [("0.838146", "0.100406"), ("0.971884", "0.193712")]},  # Main 2 >> 1
+                    "Space": {"Jump": ("0.969605", "0.834686"), "Climb": ("0.969605", "0.834686"),
+                              "Whistle": [("0.934650", "0.764706"), ("0.049392", "0.823529")],
+                              "DriveMode1|DriveSpeed": ("0.049392", "0.823529"),
+                              "DriveMode1|DriveSpeedPress": ("0.049392", "0.823529"),
+                              "SwimUp": ("0.879518", "0.759036"), "SwimmingUp": ("0.879518", "0.759036"), },
+                    "Shift": {"DriveMode1|DriveSpeed": ("0.053951", "0.683570"),
+                              "DriveMode1|DriveSpeedPress": ("0.053951", "0.683570")},
+                    "Right Click": {"Sniper": ("0.971125", "0.746450"), "Sniper2": ("0.971125", "0.746450"),
+                                    "Reload": ("0.971125", "0.746450")},  # Main
+                    "Z": {"Fall": ("0.961246", "0.967546"), "CancelFall": ("0.961246", "0.967546")},  # Main
+                    "E": {"Sideways": ("0.155775", "0.658215"), "SidewaysCancel": ("0.155775", "0.658215"),
+                          "Moto": ("0.857903", "0.738337"), "Moto2": ("0.857903", "0.738337")},  # Main
+                    "Q": {"Sideways": ("0.101064", "0.656187"), "SidewaysCancel": ("0.101064", "0.656187"),
+                          "Moto": ("0.791793", "0.736308"), "Moto2": ("0.791793", "0.736308")},
+                    "Y": {"SetUp": [("0.852584", "0.118661"), ("0.823708", "0.118661"), ("0.892097", "0.108519")]},
+                    "T": {"SetUp": [("0.841185", "0.064909"), ("0.809271", "0.064909"), ("0.888298", "0.073022")]},
+                    "Alt": {"Eye": [("0.840426", "0.166329")]},
+                    "Drive": {"DriveMode1": (("0.764438", "0.836714"), ("0.881459", "0.836714"),
+                                             ("0.116261", "0.752535"), ("0.116261", "0.883367"))},  # ADWS
+                    "F": {"Pickup|NineBlock": ("0.353906", "0.763889"), "Pickup|SixBlock": ("0.482031", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.199393"), "Pickup": ("0.721094", "0.199393"),
+                          "Pickup|SkyBoxFlag|XBtn": ("0.353906", "0.763889")},
+                    "G": {"Pickup|NineBlock": ("0.732812", "0.767206"), "Pickup|SixBlock": ("0.607812", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.251616"), "Pickup": ("0.721094", "0.251616"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.476563", "0.763889"),
+                          "Whistle": ("0.966565", "0.835700"),
+                          "OutCarShoot": ("0.965625", "0.839167"), "OutCarShoot2": ("0.965625", "0.839167")},
+                    "H": {"Pickup|NineBlock": ("0.353906", "0.847761"), "Pickup|SixBlock": ("0.732031", "0.767206"),
+                          "Pickup|XBtn": ("0.467187", "0.303839"), "Pickup": ("0.721094", "0.303839"),
+                          "Pickup|XBtn|SkyBoxFlag": ("0.353906", "0.847761")},
+                    "1": {"Jump": ("0.453906", "0.947333"), "Climb": ("0.453906", "0.947333"),
+                          "GetOutCar": ("0.453906", "0.947333")},
+                    "2": {"Jump": ("0.544531", "0.947333"), "Climb": ("0.544531", "0.947333"),
+                          "GetOutCar": ("0.544531", "0.9472333")},
+                    "Click with Scroll Wheel": {"Backpage": [("0.453906", "0.947333")]},
+                    "Slide with Scroll Wheel": {"Pickup": [("0.739844", "0.199393")],
+                                                "Pickup|XBtn": [("0.467187", "0.199393")]},
+                    "4": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "5": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "6": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "X": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "7": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "8": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "9": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
+                    "0": {"GrenadeArrowUp": [("0.894750", "0.936667"), ("0.202847", "0.894750")]},
                 }
             }
 
@@ -423,49 +614,14 @@ class Optimizer(Registry):
             with open(original_file, 'r', encoding='utf-8') as xml_file:
                 xml_code = xml_file.read()
 
-            # Create an ElementTree from the XML content
-            root = ET.fromstring(f'<root>{xml_code}</root>')
-
             for version in self.pubg_versions:
-                edited_combinations = {}
-                for item_elem in root.findall(f".//Item[@ApkName='{version}'].//KeyMapMode"):
-                    name_attr = item_elem.get("Name")
-
-                    if name_attr in ipad_keymap_values:
-                        for key_mapping_elem in item_elem.findall(".//KeyMapping"):
-                            item_name = key_mapping_elem.get("ItemName")
-
-                            for switch_operation_elem in key_mapping_elem.findall(".//SwitchOperation"):
-                                enable_switch = switch_operation_elem.get("EnableSwitch")
-
-                                if name_attr in ipad_keymap_values and enable_switch in ipad_keymap_values[name_attr]:
-                                    if item_name in ipad_keymap_values[name_attr][enable_switch]:
-                                        new_x, new_y = ipad_keymap_values[name_attr][enable_switch][item_name]
-
-                                        if (name_attr, item_name, enable_switch) not in edited_combinations:
-                                            switch_operation_elem.set("Point_X", new_x)
-                                            switch_operation_elem.set("Point_Y", new_y)
-                                            edited_combinations[(name_attr, item_name, enable_switch)] = True
-
-                        for key_mapping_elem in item_elem.findall(".//KeyMappingEx"):
-                            item_name = key_mapping_elem.get("ItemName")
-
-                            for switch_operation_elem in key_mapping_elem.findall(".//SwitchOperation"):
-                                enable_switch = switch_operation_elem.get("EnableSwitch")
-
-                                if name_attr in ipad_keymap_values and enable_switch in ipad_keymap_values[name_attr]:
-                                    if item_name in ipad_keymap_values[name_attr][enable_switch]:
-                                        new_values = list(ipad_keymap_values[name_attr][enable_switch][item_name])
-
-                                        for (x, y), point_val in zip(new_values, key_mapping_elem.findall(".//Point")):
-                                            point_val.set("Point_X", x)
-                                            point_val.set("Point_Y", y)
-
-            modified_xml_code = ET.tostring(root, encoding='utf-8').decode('utf-8')
-            modified_xml_code = modified_xml_code.replace("<root>", "").replace("</root>", "")
-
+                for resolution, values in ipad_keymap_values.items():
+                    for button_name, switches in values.items():
+                        for switch_name, points in switches.items():
+                            xml_code = update_xml(xml_code, version, resolution, button_name, switch_name, points,
+                                                  main_value=True)
             with open(original_file, 'w', encoding='utf-8') as modified_file:
-                modified_file.write(modified_xml_code)
+                modified_file.write(xml_code)
 
         if reset:
             shutil.copy2(backup_file, original_file)
@@ -547,7 +703,7 @@ class Game(Optimizer):
     @staticmethod
     def is_gameloop_running():
         running_process_list = subprocess.check_output(["tasklist"])
-        emulator_processes = [b"AndroidEmulatorEx.exe", b"AndroidEmulatorEn.exe"]
+        emulator_processes = [b"AndroidEmulatorEx.exe", b"AndroidEmulatorEn.exe", b"AndroidEmulator.exe"]
         return any(process in running_process_list for process in emulator_processes)
 
     def check_adb_connection(self):
@@ -565,7 +721,7 @@ class Game(Optimizer):
         Checks if any version of PUBG is installed on the device.
         """
         self.PUBG_Found = [version_name for package_name, version_name in self.pubg_versions.items()
-                       if self.adb.shell(f"pm list packages {package_name}")]
+                           if self.adb.shell(f"pm list packages {package_name}")]
 
     def get_graphics_file(self, package: str):
         active_savegames_path = f"/sdcard/Android/data/{package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames/Active.sav"
@@ -670,17 +826,20 @@ class Game(Optimizer):
 
         return shadow_name
 
-    # TODO : Add this function
+    # Todo: Make This Function Working
     def set_shadow(self, value):
         """
         Sets the shadow value in the Active.sav file.
         :param value: Shadow value to set ("ON" or "OFF")
         :return: True if successful, False otherwise
         """
+
         shadow_value = {"ON": 48, "OFF": 49}.get(value)
         if shadow_value is None:
             return False
-
+        shadow_values = {"r.UserShadowSwitch": "1", "r.ShadowQuality": "1", "r.Mobile.DynamicObjectShadow": "1",
+                         "r.Shadow.MaxCSMResolution": "1", "r.Shadow.DistanceScale": "1",
+                         "r.Shadow.CSM.MaxMobileCascades": "1"}
         lines = []
         with open(self.resource_path(r"assets\user.mkvip"), "r") as file:
             for line in file:
@@ -753,9 +912,9 @@ class Game(Optimizer):
 
         files = [
             (self.resource_path(r"assets\new.mkvip"),
-             "/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames/Active.sav"),
+             f"/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames/Active.sav"),
             (self.resource_path(r"assets\user.mkvip"),
-             "/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/UserCustom.ini")
+             f"/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/UserCustom.ini")
         ]
 
         for src, dest in files:

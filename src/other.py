@@ -1,6 +1,25 @@
 import ping3
-import requests
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
+from . import setup_logger
+#TODO: Fix Temp Cleaner, Gameloop Optimizer, New IPAD
+
+
+class IPADWorkerThread(QThread):
+    task_completed = pyqtSignal()
+
+    def __init__(self, window, ui, gfx):
+        super(IPADWorkerThread, self).__init__()
+        self.app = window
+        self.ui = ui
+        self.gfx = gfx
+
+    def run(self):
+        width, height = self.ui.ipad_dropdown.currentText().split(" x ", 1)
+        width = int(width)
+        height = int(height)
+        self.app.ipad_settings(width, height)
+        self.task_completed.emit()
+
 
 
 class Other(QObject):
@@ -18,6 +37,7 @@ class Other(QObject):
             "Yandex DNS - 77.88.8.1": ['77.88.8.1', '77.88.8.8']
         }
         self.function()
+        self.logger = setup_logger('error_logger', 'error.log')
 
     def function(self):
         ui = self.ui
@@ -44,29 +64,43 @@ class Other(QObject):
 
     def temp_cleaner_button_click(self, e):
         """ Temp Cleaner Button On Click Function """
-        self.app.temp_cleaner()
-        self.app.show_status_message("System performance improved!")
+        try:
+            self.app.temp_cleaner()
+            self.app.show_status_message("System performance improved.")
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+            self.app.show_status_message(f"There was an Error saved in error.log")
 
     def gameloop_smart_settings_button_click(self, e):
         """ Gameloop Smart Settings Button On Click Function """
-        self.app.gameloop_settings()
-        self.app.show_status_message("Smart settings applied successfully.")
-
+        try:
+            self.app.gameloop_settings()
+            self.app.show_status_message("Smart settings applied successfully.")
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+            self.app.show_status_message(f"There was an Error saved in error.log")
     def gameloop_optimizer_button_click(self, e):
         """ Gameloop Optimizer Button On Click Function """
-        self.app.add_to_windows_defender_exclusion()
-        self.app.optimize_gameloop_registry()
-        self.app.optimize_for_nvidia()
-        self.app.show_status_message("Gameloop optimizer applied successfully.")
-
+        try:
+            self.app.add_to_windows_defender_exclusion()
+            self.app.optimize_gameloop_registry()
+            self.app.optimize_for_nvidia()
+            self.app.show_status_message("Gameloop optimizer applied successfully.")
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+            self.app.show_status_message(f"There was an Error saved in error.log")
     def all_recommended_button_click(self, e):
         """ All Recommended Button On Click Function """
-        self.app.temp_cleaner()
-        self.app.gameloop_settings()
-        self.app.add_to_windows_defender_exclusion()
-        self.app.optimize_gameloop_registry()
-        self.app.optimize_for_nvidia()
-        self.app.show_status_message("All recommended settings applied successfully.")
+        try:
+            self.app.gameloop_settings()
+            self.app.add_to_windows_defender_exclusion()
+            self.app.optimize_gameloop_registry()
+            self.app.optimize_for_nvidia()
+            self.app.temp_cleaner()
+            self.app.show_status_message("All recommended settings applied successfully.")
+        except Exception as e:
+            self.logger.error(f"Exception occurred: {str(e)}", exc_info=True)
+            self.app.show_status_message(f"There was an Error saved in error.log")
 
     def kill_gameloop_processes_button_click(self, e):
         """Terminates Gameloop processes when the button is clicked."""
@@ -84,7 +118,6 @@ class Other(QObject):
 
     def dns_submit_button_click(self, e):
         """ DNS Submit Button On Click Function """
-
         dns_key = self.ui.dns_dropdown.currentText()
         dns_server = self.dns_servers.get(dns_key)
 
@@ -105,37 +138,23 @@ class Other(QObject):
         self.ui.dns_status_label.setText(ping_result)
 
     def ipad_submit_button_click(self, e):
-        def get_ipad_layout_code():
-            url = "https://raw.githubusercontent.com/MohamedKVIP/MK-PUBG-Mobile-Tool/main/ipad_layout.json"
-            try:
-                response = requests.get(url).json()
-                code = response.get("code")
-                last_update = response.get("last_update")
-                if code:
-                    self.ui.ipad_code.setText(code)
-                    self.ui.ipad_code_label.setText(f"last update: {last_update}")
-                    return True
-            except:
-                return False
+        try:
+            if self.app.is_gameloop_running():
+                self.app.show_status_message(f"Close Gameloop to use this button. (Force Close Gameloop)", 5)
+                return
+            self.app.show_status_message("please wait, Working on it...", 7)
+            self.ui.ipad_other_btn.setEnabled(False)
+            self.worker_ipad_submit = IPADWorkerThread(self.app, self.ui, self)
+            self.worker_ipad_submit.task_completed.connect(self.submit_ipad_done)
+            self.worker_ipad_submit.start()
+        except ValueError:
+            self.app.show_status_message("Invalid width or height values", 5)
 
-        if get_ipad_layout_code():
-            width, height = self.ui.ipad_dropdown.currentText().split(" x ", 1)
-            try:
-                width = int(width)
-                height = int(height)
-                if self.app.is_gameloop_running():
-                    self.app.show_status_message(f"Close Gameloop to use this button. (Force Close Gameloop)", 5)
-                    return
-                self.ui.ipad_code.show()
-                self.ui.ipad_code_label.show()
-                self.ui.ipad_rest_btn.show()
-                self.app.ipad_settings(width, height)
-                gameloop_status = "Restart" if self.app.is_gameloop_running() else "Start"
-                self.app.show_status_message(f"{gameloop_status} Gameloop and Copy layout code and use it in game.", 7)
-            except ValueError:
-                self.app.show_status_message("Invalid width or height values", 5)
-        else:
-            self.app.show_status_message("Could not get layout code")
+    def submit_ipad_done(self):
+        self.ui.ipad_other_btn.setEnabled(True)
+        self.ui.ipad_rest_btn.show()
+        gameloop_status = "Restart" if self.app.is_gameloop_running() else "Start"
+        self.app.show_status_message(f"{gameloop_status} Gameloop and enjoy with IPAD settings.", 7)
 
     def ipad_reset_button_click(self, e):
         if self.app.is_gameloop_running():
@@ -147,6 +166,6 @@ class Other(QObject):
         width, height = self.app.reset_ipad()
         self.ui.ipad_rest_btn.hide()
 
-        gameloop_status = "Restart" if self.app.is_gameloop_running() else "Start"
-        message = f"{gameloop_status} Gameloop to Utilize Resolution ({width} x {height})."
+        # gameloop_status = "Restart" if self.app.is_gameloop_running() else "Start"
+        message = f"Start Gameloop to Utilize Resolution ({width} x {height})."
         self.app.show_status_message(message, 7)

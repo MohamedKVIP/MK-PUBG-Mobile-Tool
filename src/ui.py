@@ -1,33 +1,11 @@
 # -*- coding: utf-8 -*-
-
-import sys
-from os import path
-
-################################################################################
-## Form generated from reading UI file 'untitled1nMoHZV.ui'
-##
-## Created by: Qt User Interface Compiler version 5.15.2
-##
-## WARNING! All changes made in this file will be lost when recompiling UI file!
-################################################################################
 # QFont\(\)\s+font\d+\.setFamily\(u"Agency FB"\)  to QFont(font_family)
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-
+from . import resource_path
 from .ui_images import resources_rc
-
-
-# Get Script Run Location
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = path.abspath(".")
-
-    return path.join(base_path, relative_path)
-
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -45,7 +23,7 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         MainWindow.setFont(font)
         icon = QIcon()
-        icon.addFile(u":/Graphics/logo.ico", QSize(), QIcon.Normal, QIcon.Off)
+        icon.addFile(resource_path(r"assets\icons\logo.ico"), QSize(), QIcon.Normal, QIcon.Off)
         MainWindow.setWindowIcon(icon)
         MainWindow.setStyleSheet(u"QMenu::item { background-color: rgb(85, 85, 85); }\n"
                                  "QComboBox::drop-down {\n"

@@ -1,11 +1,10 @@
 import sys
 import os
-import subprocess
 import zipfile
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton
-
+from . import resource_path
 import requests
 
 
@@ -52,9 +51,12 @@ class DownloadThread(QThread):
 
 
 class UpdateWindow(QMainWindow):
+
     def __init__(self):
         super().__init__()
-
+        icon = QIcon()
+        icon.addFile(resource_path(r"assets\icons\logo.ico"), QSize(), QIcon.Normal, QIcon.Off)
+        self.setWindowIcon(icon)
         self.setWindowTitle("Update Available")
         self.resize(350, 200)
         # Center the window on the screen
@@ -62,8 +64,6 @@ class UpdateWindow(QMainWindow):
         x = (screen_geometry.width() - self.width()) // 2
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
-
-        self.setWindowIcon(QIcon(":/Graphics/logo.ico"))
 
         self.label = QLabel("Checking for updates...")
         self.label.setMaximumHeight(20)
@@ -177,14 +177,3 @@ class UpdateWindow(QMainWindow):
         self.check_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.close()
-
-
-# def main():
-#     app = QApplication(sys.argv)
-#     window = UpdateWindow()
-#     window.show()
-#     sys.exit(app.exec_())
-#
-#
-# if __name__ == "__main__":
-#     main()
