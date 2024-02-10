@@ -77,11 +77,12 @@
 <h2>الاستخدام</h2>
 
 هناك طريقتين للتشغيل, <br>
-شرح الاداة على اليويتوب من هنا: [https://youtu.be/AL6y4RINzTE](https://youtu.be/AL6y4RINzTE) 
 
 <h3>1- التشغيل من ضغطة واحدة</h3>
 
 لاستخدام هذه الأداة، ما عليك سوى تنزيل التطبيق من [صفحة الإصدارات (تنزيل)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) وتشغيله على الكمبيوتر. اتبع التعليمات على الشاشة لتغيير إعدادات الرسومات، تحسين محاكي Gameloop والكمبيوتر، أو إنشاء اختصار على سطح المكتب لـ PUBG Mobile.
+
+شرح استخدام الاداة [هنا (اضغط هنا)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/wiki)
 
 <h3>2- بايثون</h3>
 
