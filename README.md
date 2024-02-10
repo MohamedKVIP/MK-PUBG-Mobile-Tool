@@ -71,6 +71,8 @@ There is 2 ways to run the tool
 ### 1- Download and Run
 To use this tool, simply download the app from the [releases page (Download)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/releases) and run it on your PC. Follow the on-screen instructions to change the graphics settings, optimize Gameloop and PC, or create a desktop shortcut for PUBG Mobile.
 
+##### How to use the tool [Wiki page (Click Here)](https://github.com/MohamedKVIP/MK-PUBG-Mobile-Tool/wiki)
+
 ### 2- Python
 Download the source code, then install the necessary dependencies to run it:
 ```shell
