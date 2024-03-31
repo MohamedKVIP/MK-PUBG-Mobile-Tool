@@ -4,9 +4,11 @@ from datetime import datetime
 from pathlib import Path
 from src.ui_functions import Window, QtWidgets
 from src.update import UpdateWindow
+from PyQt5 import QtCore
+from os import environ
 
 APP_NAME = "MK PUBG Mobile Tool"
-APP_VERSION = "v1.0.6"
+APP_VERSION = "v1.0.7"
 FULL_APP_NAME = f"{APP_NAME} {APP_VERSION}"
 ctypes.windll.kernel32.SetConsoleTitleW(FULL_APP_NAME)
 
@@ -23,12 +25,34 @@ def run_application():
 if __name__ == "__main__":
     print("[#] Starting the GUI app")
 
+    def suppress_qt_warnings():
+        DS = "1.5"
+
+        scaleFactor = str(ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100)
+        if float(scaleFactor) > float(DS):
+            scaleFactor = DS
+
+        environ["QT_DEVICE_PIXEL_RATIO"] = "0"
+        environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
+        environ["QT_SCALE_FACTOR"] = "1"
+        environ["QT_SCREEN_SCALE_FACTORS"] = scaleFactor
+
+
+    suppress_qt_warnings()
+
+    if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
+        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+
+    if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
+        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+
     try:
         app = QtWidgets.QApplication(sys.argv)
+
         update = UpdateWindow()
         update.check_for_updates(APP_VERSION)
 
-        if update.is_update_needed():
+        if update.is_update_available():
             update.show()
             if app.exec_() == 0:
                 run_application()

@@ -121,14 +121,14 @@ class UpdateWindow(QMainWindow):
                 self.asset_name = asset.get("name", "")
                 self.download_url = asset.get("browser_download_url", "")
 
-                if self.is_update_needed():
+                if self.is_update_available():
                     self.show_update_available()
             else:
                 self.show_no_assets_found()
         else:
             self.latest_version = self.current_version
 
-    def is_update_needed(self):
+    def is_update_available(self):
         try:
             return self.current_version != self.latest_version
         except TypeError:

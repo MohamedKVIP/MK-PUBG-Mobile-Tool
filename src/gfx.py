@@ -28,6 +28,11 @@ class SubmitWorkerThread(QThread):
         self.app.save_graphics_file()
         self.app.push_active_shadow_file()
 
+        if self.app.pubg_package == "com.pubg.krmobile" and self.ui.resolution_btn.isChecked():
+            self.app.kr_fullhd()
+        else:
+            self.app.start_app()
+
         self.task_completed.emit()
 
 
@@ -46,6 +51,12 @@ class ConnectWorkerThread(QThread):
         pubg_package = next(key for key, value in self.app.pubg_versions.items() if value == pubg_version)
         self.app.get_graphics_file(pubg_package)
 
+    def show_connection_error(self, message):
+        self.ui.connect_gameloop_btn.setChecked(False)
+        self.ui.connect_gameloop_btn.setText("Connect to Gameloop")
+        self.app.show_status_message(message)
+        self.task_completed.emit()
+
     def run(self):
         self.ui.connect_gameloop_btn.setText("Connecting...")
         self.ui.connect_gameloop_btn.setEnabled(False)
@@ -53,19 +64,19 @@ class ConnectWorkerThread(QThread):
         self.app.check_adb_status()
 
         if not self.app.adb_enabled:
-            self.ui.connect_gameloop_btn.setChecked(False)
-            self.ui.connect_gameloop_btn.setText("Connect to Gameloop")
-            self.app.show_status_message("Restart GameLoop and Try Again.")
-            self.task_completed.emit()
+            message = "Restart GameLoop and Try Again." if self.app.is_gameloop_running() else "GameLoop not working."
+            self.show_connection_error(message)
+            return
+
+        if not self.app.is_gameloop_running():
+            self.show_connection_error("GameLoop not working.")
             return
 
         self.app.check_adb_connection()
 
-        if not self.app.adb_work:
-            self.ui.connect_gameloop_btn.setChecked(False)
-            self.ui.connect_gameloop_btn.setText("Connect to Gameloop")
-            self.app.show_status_message("Gameloop not working.")
-            self.task_completed.emit()
+        if not self.app.is_adb_working:
+            message = "Restart GameLoop and Try Again." if self.app.is_gameloop_running() else "Gameloop not working."
+            self.show_connection_error(message)
             return
 
         self.app.pubg_version_found()
@@ -76,6 +87,7 @@ class ConnectWorkerThread(QThread):
             self.task_completed.emit()
             return
         elif num_found > 1:
+            self.ui.pubgchoose_dropdown.clear()
             self.ui.pubgchoose_dropdown.addItems(self.app.PUBG_Found)
             self.ui.pubgchoose_dropdown.setCurrentText(self.app.PUBG_Found[0])
             self.ui.PubgchooseFrame.setVisible(True)
@@ -126,10 +138,8 @@ class GFX(QObject):
     def submit_gfx_done(self):
         self.ui.submit_gfx_btn.setEnabled(True)
         if self.app.pubg_package == "com.pubg.krmobile" and self.ui.resolution_btn.isChecked():
-            self.app.kr_fullhd()
             status_message = "Graphics settings applied, resolution set to 1080p."
         else:
-            self.app.start_app()
             status_message = "Graphics settings applied successfully."
         self.app.show_status_message(status_message)
 
@@ -143,6 +153,8 @@ class GFX(QObject):
             self.gfx_buttons(enabled=checked)
             self.ui.disable_shadow_btn.setChecked(False)
             self.ui.enable_shadow_btn.setChecked(False)
+            self.ui.ResolutionkrFrame.hide()
+            self.ui.PubgchooseFrame.hide()
             self.app.kill_adb()
             self.ui.connect_gameloop_btn.setText("Connect to GameLoop")
             self.app.show_status_message("Disconnected from GameLoop", 3)
@@ -157,7 +169,7 @@ class GFX(QObject):
         self.connect_gameloop_task_completed(checked=False)
 
     def connect_gameloop_task_completed(self, checked: bool = True):
-        if not self.app.adb_work:
+        if not self.app.is_adb_working:
             self.ui.connect_gameloop_btn.setEnabled(True)
             return
         if checked:

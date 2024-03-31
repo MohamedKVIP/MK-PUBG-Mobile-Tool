@@ -19,6 +19,7 @@ from win32api import EnumDisplayDevices, EnumDisplaySettings
 from win32com.client import Dispatch
 from . import setup_logger
 
+
 class Settings:
     def __init__(self):
         self.settings = QSettings("MK Apps", "MK PUBG Mobile Tool")
@@ -298,8 +299,10 @@ class Optimizer(Registry):
                 filter_setting.find('SettingValue').text = '1'
 
             tree.write(nvidia_profile_path, encoding='utf-16')
+
         try:
             nvidia_profile_path = self.resource_path("assets/mk.nip")
+
             def is_gpu_nvidia() -> bool:
                 try:
                     gpu_provider = wmi.WMI().Win32_VideoController()[0].AdapterCompatibility
@@ -347,17 +350,14 @@ class Optimizer(Registry):
             'GameDownload.exe'  # Process 15
         ]
 
-        # Counter to track number of processes killed
         processes_killed = 0
 
-        # Loop through each process in the list and kill them
         for process in processes_to_kill:
             result = subprocess.run(['taskkill', '/F', '/IM', process, '/T'], stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL)
             if result.returncode == 0:
                 processes_killed += 1
 
-        # If at least one process was killed, return True; otherwise, return False
         return processes_killed >= 1
 
     @staticmethod
@@ -372,12 +372,12 @@ class Optimizer(Registry):
         # Retrieve all network adapters
         adapters = wmi_api.Win32_NetworkAdapterConfiguration(IPEnabled=True)
 
-        success = all(adapter.SetDNSServerSearchOrder(dns_servers)[0] == 0 for adapter in adapters)
+        dns_changed_status = all(adapter.SetDNSServerSearchOrder(dns_servers)[0] == 0 for adapter in adapters)
 
         # Flush DNS cache
         subprocess.run(['ipconfig', '/flushdns'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
-        return success
+        return dns_changed_status
 
     def ipad_layout_settings(self, reset=False):
         """
@@ -387,75 +387,92 @@ class Optimizer(Registry):
             reset (bool): If True, the XML file will be reset to its original state by copying the backup file. If False, the layout will be modified based on the edited values.
         """
         appdata_folder = os.getenv('APPDATA')
-        androidtbox_folder = os.path.join(appdata_folder, 'AndroidTbox')
-        original_file = os.path.join(androidtbox_folder, 'TVM_100.xml')
-        backup_file = os.path.join(androidtbox_folder, 'TVM_100.xml.mkbackup')
+        keymap_folder = os.path.join(appdata_folder, 'AndroidTbox')
+        original_file = os.path.join(keymap_folder, 'TVM_100.xml')
+        backup_file = os.path.join(keymap_folder, 'TVM_100.xml.mkbackup')
 
         def set_keymap_layout():
             """
             Modify the layout of the XML file based on the edited values.
             """
-            def update_xml(xml_string, pubg_version, query, item_name, enable_switch, new_points, main_value=None):
-                root = ET.fromstring(f'<root>{xml_string}</root>')
-                for item_elem in root.findall(f".//Item[@ApkName='{pubg_version}'].//KeyMapMode"):
-                    name_attr = item_elem.get("Name")
-                    if name_attr == query:
-                        key_mapping_ex = item_elem.find(f'.//KeyMappingEx[@ItemName="{item_name}"]')
-                        key_mapping = item_elem.find(f'.//KeyMapping[@ItemName="{item_name}"]')
-                        if key_mapping_ex is not None:
-                            if key_mapping_ex.findall(f'.//SwitchOperation[@EnablePositionSwitch]') != []:
-                                old_x, old_x2 = None, None
-                                for (new_y1, new_y2), point_val in zip(new_points, key_mapping_ex.findall(
-                                        f'.//SwitchOperation[@Description="{enable_switch}"]')):
-                                    texture, points = point_val.get(f'EnablePositionSwitch').split(":")
-                                    x1, y1, x2, y2 = points.split(",")
-                                    old_x = x1 if old_x is None else old_x
-                                    old_x2 = x2 if old_x2 is None else old_x2
-                                    point_val.set('EnablePositionSwitch',
-                                                  f'{texture}:{old_x},{new_y1},{old_x2},{new_y2}')
-                            else:
-                                for _ in key_mapping_ex.findall(f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'):
-                                    if len(key_mapping_ex.findall(".//Point") or key_mapping_ex.findall(
-                                            ".//DriveKey") or key_mapping_ex.findall(".//SwitchOperation")) < len(
-                                        new_points):
-                                        zz = key_mapping_ex.findall(".//Point")
-                                        for _ in range(len(new_points) - len(zz)):
-                                            zz.append(ET.Element("Point"))
-                                    else:
-                                        zz = key_mapping_ex.findall(".//Point")
 
-                                    for (x, y), point_val in zip(new_points, (
-                                            zz or key_mapping_ex.findall(".//DriveKey") or key_mapping_ex.findall(
-                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'))):
-                                        if main_value is not None:
-                                            if item_name == "Click with Scroll Wheel" and enable_switch == "Backpage":
-                                                key_mapping_ex.set('Click_X', str(float(x) + 0.1))
-                                                key_mapping_ex.set('Click_Y', str(y))
+            def update_xml(ipad_keymap):
+                with open(original_file, 'r', encoding='utf-8') as file:
+                    xml_code = file.read()
 
-                                            key_mapping_ex.set('Point_X', str(x))
-                                            key_mapping_ex.set('Point_Y', str(y))
+                root = ET.fromstring(f'<root>{xml_code}</root>')
+                for pubg_version in self.pubg_versions:
+                    if root.find(f".//Item[@ApkName='{pubg_version}']") is not None:
+                        for query, values in ipad_keymap.items():
+                            for button_name, switches in values.items():
+                                for switch_name, points in switches.items():
+                                    item_elem = root.find(f".//Item[@ApkName='{pubg_version}'].//KeyMapMode[@Name='{query}']")
+                                    if item_elem is not None:
+                                        key_mapping_ex = item_elem.find(f'.//KeyMappingEx[@ItemName="{button_name}"]')
+                                        key_mapping = item_elem.find(f'.//KeyMapping[@ItemName="{button_name}"]')
+                                        if key_mapping_ex is not None:
+                                            if key_mapping_ex.findall(f'.//SwitchOperation[@EnablePositionSwitch]'):
+                                                old_x, old_x2 = None, None
+                                                for (new_y1, new_y2), point_val in zip(points, key_mapping_ex.findall(
+                                                        f'.//SwitchOperation[@Description="{switch_name}"]')):
+                                                    texture, points = point_val.get(f'EnablePositionSwitch').split(":")
+                                                    x1, y1, x2, y2 = points.split(",")
+                                                    old_x = x1 if old_x is None else old_x
+                                                    old_x2 = x2 if old_x2 is None else old_x2
+                                                    point_val.set('EnablePositionSwitch',
+                                                                  f'{texture}:{old_x},{new_y1},{old_x2},{new_y2}')
+                                            else:
+                                                for _ in key_mapping_ex.findall(
+                                                        f'.//SwitchOperation[@EnableSwitch="{switch_name}"]'):
+                                                    if len(key_mapping_ex.findall(".//Point") or key_mapping_ex.findall(
+                                                            ".//DriveKey") or key_mapping_ex.findall(
+                                                        ".//SwitchOperation")) < len(
+                                                        points):
+                                                        zz = key_mapping_ex.findall(".//Point")
+                                                        for _ in range(len(points) - len(zz)):
+                                                            zz.append(ET.Element("Point"))
+                                                    else:
+                                                        zz = key_mapping_ex.findall(".//Point")
 
-                                        if point_val.get('Point_X') is not None:
-                                            point_val.set('Point_X', str(x))
-                                            point_val.set('Point_Y', str(y))
-                        elif key_mapping is not None:
-                            x, y = new_points
-                            if (main_value and key_mapping.get('Point_X')) is not None:
-                                key_mapping.set('Point_X', str(x))
-                                key_mapping.set('Point_Y', str(y))
+                                                    for (x, y), point_val in zip(points, (
+                                                            zz or key_mapping_ex.findall(
+                                                        ".//DriveKey") or key_mapping_ex.findall(
+                                                        f'.//SwitchOperation[@EnableSwitch="{switch_name}"]'))):
+                                                        # if main_value is not None:
+                                                        if button_name == "Click with Scroll Wheel" and switch_name == "Backpage":
+                                                            key_mapping_ex.set('Click_X', str(float(x) + 0.1))
+                                                            key_mapping_ex.set('Click_Y', str(y))
 
-                            if isinstance(new_points, list):
-                                for (x, y), point_element in zip(new_points, key_mapping.findall(
-                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]')):
-                                    point_element.set('Point_X', str(x))
-                                    point_element.set('Point_Y', str(y))
-                            else:
-                                for point_element in key_mapping.findall(
-                                        f'.//SwitchOperation[@EnableSwitch="{enable_switch}"]'):
-                                    point_element.set('Point_X', str(x))
-                                    point_element.set('Point_Y', str(y))
-                modified_xml_code = ET.tostring(root, encoding='utf-8').decode('utf-8')
-                return modified_xml_code.replace("<root>", "").replace("</root>", "")
+                                                        key_mapping_ex.set('Point_X', str(x))
+                                                        key_mapping_ex.set('Point_Y', str(y))
+
+                                                        if point_val.get('Point_X') is not None:
+                                                            point_val.set('Point_X', str(x))
+                                                            point_val.set('Point_Y', str(y))
+                                        elif key_mapping is not None:
+                                            try:
+                                                x, y = points
+                                            except ValueError:
+                                                print(switch_name, points, "Wrong format")
+                                                modified_xml_code = ET.tostring(root, encoding='utf-8').decode('utf-8')
+                                                return modified_xml_code.replace("<root>", "").replace("</root>", "")
+                                            if key_mapping.get('Point_X') is not None:
+                                                key_mapping.set('Point_X', str(x))
+                                                key_mapping.set('Point_Y', str(y))
+
+                                            if isinstance(points, list):
+                                                for (x, y), point_element in zip(points, key_mapping.findall(
+                                                        f'.//SwitchOperation[@EnableSwitch="{switch_name}"]')):
+                                                    point_element.set('Point_X', str(x))
+                                                    point_element.set('Point_Y', str(y))
+                                            else:
+                                                for point_element in key_mapping.findall(
+                                                        f'.//SwitchOperation[@EnableSwitch="{switch_name}"]'):
+                                                    point_element.set('Point_X', str(x))
+                                                    point_element.set('Point_Y', str(y))
+                # print(ET.tostring(root, encoding='utf-8').decode('utf-8')[6:-7])
+                with open(original_file, 'w', encoding='utf-8') as file:
+                    file.write(ET.tostring(root, encoding='utf-8').decode('utf-8')[6:-7])
 
             ipad_keymap_values = {
                 "Smart 720P": {
@@ -610,18 +627,9 @@ class Optimizer(Registry):
                 }
             }
 
-            # Read the XML content
-            with open(original_file, 'r', encoding='utf-8') as xml_file:
-                xml_code = xml_file.read()
 
-            for version in self.pubg_versions:
-                for resolution, values in ipad_keymap_values.items():
-                    for button_name, switches in values.items():
-                        for switch_name, points in switches.items():
-                            xml_code = update_xml(xml_code, version, resolution, button_name, switch_name, points,
-                                                  main_value=True)
-            with open(original_file, 'w', encoding='utf-8') as modified_file:
-                modified_file.write(xml_code)
+            update_xml(ipad_keymap_values)
+
 
         if reset:
             shutil.copy2(backup_file, original_file)
@@ -630,6 +638,7 @@ class Optimizer(Registry):
             if not os.path.exists(backup_file):
                 shutil.copy2(original_file, backup_file)
             set_keymap_layout()
+
 
     def ipad_settings(self, width: int, height: int) -> None:
         """
@@ -667,6 +676,10 @@ class Optimizer(Registry):
 
 
 class Game(Optimizer):
+
+    def __init__(self):
+        super().__init__()
+        self.is_adb_working = None
 
     def gen_game_icon(self, game_name):
         gameloop_market_path = self.get_local_reg("InstallPath") or r"C:\Program Files\TxGameAssistant\AppMarket"
@@ -706,20 +719,30 @@ class Game(Optimizer):
         emulator_processes = [b"AndroidEmulatorEx.exe", b"AndroidEmulatorEn.exe", b"AndroidEmulator.exe"]
         return any(process in running_process_list for process in emulator_processes)
 
-    def check_adb_connection(self):
+    def check_adb_connection(self, first_check=True):
         try:
             client = adbutils.AdbClient()
             self.adb = client.device(serial="emulator-5554")
+
+            while not self.adb.shell("getprop dev.bootcomplete"):
+                pass
+
             self.adb.sync.pull("/default.prop", self.resource_path(r'assets\testADB.mkvip'))
-            self.adb_work = True
-        except Exception:
+            self.is_adb_working = True
+
+        except Exception as e:
             self.kill_adb()
-            self.adb_work = False
+            self.is_adb_working = False
+
+            if first_check:
+                self.check_adb_connection(False)
 
     def pubg_version_found(self):
         """
         Checks if any version of PUBG is installed on the device.
         """
+        while not self.adb.shell("getprop dev.bootcomplete"):
+            pass
         self.PUBG_Found = [version_name for package_name, version_name in self.pubg_versions.items()
                            if self.adb.shell(f"pm list packages {package_name}")]
 
@@ -747,7 +770,7 @@ class Game(Optimizer):
             "High": b"\x04",
             "Ultra": b"\x05",
             "Extreme": b"\x06",
-            "90 fps": b"\x07",
+            "Extreme+": b"\x07",
         }
         fps_value = fps_mapping.get(val)
 
@@ -802,7 +825,7 @@ class Game(Optimizer):
             b"\x04": "High",
             b"\x05": "Ultra",
             b"\x06": "Extreme",
-            b"\x07": "90 fps",
+            b"\x07": "Extreme+",
         }
         return fps_dict.get(fps_hex, None)
 
@@ -896,7 +919,7 @@ class Game(Optimizer):
             "Ultra HD": b'\x05'
         }
 
-        graphics_setting = graphics_setting_dict.get(quality, b'\x00')
+        graphics_setting = graphics_setting_dict.get(quality, b'\x01')
 
         # Set the graphics quality
         graphics_files = ["ArtQuality", "LobbyRenderQuality", "BattleRenderQuality"]
@@ -910,11 +933,11 @@ class Game(Optimizer):
         self.adb.shell(f"am force-stop {self.pubg_package}")
         sleep(0.2)
 
+        data_dir = f"/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"
+
         files = [
-            (self.resource_path(r"assets\new.mkvip"),
-             f"/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames/Active.sav"),
-            (self.resource_path(r"assets\user.mkvip"),
-             f"/sdcard/Android/data/{self.pubg_package}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/UserCustom.ini")
+            (self.resource_path(r"assets\new.mkvip"), f"{data_dir}/SaveGames/Active.sav"),
+            (self.resource_path(r"assets\user.mkvip"), f"{data_dir}/Config/Android/UserCustom.ini")
         ]
 
         for src, dest in files:
@@ -946,12 +969,14 @@ class Game(Optimizer):
         obb_path = f"/sdcard/Android/obb/{self.pubg_package}"
         user_custom_ini_path = f"{data_path}/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/UserCustom.ini"
 
+        safe_path = "/sdcard/mk_safe_folder"
+        data_path_for_account = f"/data/data/{self.pubg_package}"
+
         self.adb.push(self.resource_path('assets\mk_kr.ini'), user_custom_ini_path)
 
-        safe_path = "/sdcard/mk_safe_folder"
         self.adb.shell(f"mkdir -p {safe_path}")
-        self.adb.shell(f"cp -r {data_path}/shared_prefs {safe_path}/shared_prefs")
-        self.adb.shell(f"cp -r {data_path}/databases {safe_path}/databases")
+        self.adb.shell(f"cp -r {data_path_for_account}/shared_prefs {safe_path}/shared_prefs")
+        self.adb.shell(f"cp -r {data_path_for_account}/databases {safe_path}/databases")
 
         backup_folder(data_path)
         backup_folder(obb_path)
@@ -963,8 +988,8 @@ class Game(Optimizer):
         restore_folder(data_path)
         restore_folder(obb_path)
 
-        self.adb.shell(f"cp -r {safe_path}/shared_prefs {data_path}/shared_prefs")
-        self.adb.shell(f"cp -r {safe_path}/databases {data_path}/databases")
+        self.adb.shell(f"cp -r {safe_path}/shared_prefs {data_path_for_account}/shared_prefs")
+        self.adb.shell(f"cp -r {safe_path}/databases {data_path_for_account}/databases")
 
         self.start_app()
 

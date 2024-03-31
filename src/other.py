@@ -1,7 +1,7 @@
 import ping3
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
+import re
 from . import setup_logger
-#TODO: Fix Temp Cleaner, Gameloop Optimizer, New IPAD
 
 
 class IPADWorkerThread(QThread):
@@ -14,12 +14,21 @@ class IPADWorkerThread(QThread):
         self.gfx = gfx
 
     def run(self):
-        width, height = self.ui.ipad_dropdown.currentText().split(" x ", 1)
-        width = int(width)
-        height = int(height)
+        width, height = self.extract_dimensions(self.ui.ipad_dropdown.currentText())
         self.app.ipad_settings(width, height)
         self.task_completed.emit()
 
+    @staticmethod
+    def extract_dimensions(string):
+        pattern = r'(\d+)\s*x\s*(\d+)'
+        match = re.search(pattern, string)
+
+        if match:
+            width = int(match.group(1))
+            height = int(match.group(2))
+            return width, height
+        else:
+            return None
 
 
 class Other(QObject):
@@ -142,8 +151,9 @@ class Other(QObject):
             if self.app.is_gameloop_running():
                 self.app.show_status_message(f"Close Gameloop to use this button. (Force Close Gameloop)", 5)
                 return
-            self.app.show_status_message("please wait, Working on it...", 7)
+            self.app.show_status_message("please wait, Working on it...", 15)
             self.ui.ipad_other_btn.setEnabled(False)
+            self.ui.ipad_rest_btn.setEnabled(False)
             self.worker_ipad_submit = IPADWorkerThread(self.app, self.ui, self)
             self.worker_ipad_submit.task_completed.connect(self.submit_ipad_done)
             self.worker_ipad_submit.start()
@@ -152,6 +162,7 @@ class Other(QObject):
 
     def submit_ipad_done(self):
         self.ui.ipad_other_btn.setEnabled(True)
+        self.ui.ipad_rest_btn.setEnabled(True)
         self.ui.ipad_rest_btn.show()
         gameloop_status = "Restart" if self.app.is_gameloop_running() else "Start"
         self.app.show_status_message(f"{gameloop_status} Gameloop and enjoy with IPAD settings.", 7)
