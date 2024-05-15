@@ -198,7 +198,8 @@ class GFX(QObject):
             self.ui.high_fps_btn,
             self.ui.ultra_fps_btn,
             self.ui.extreme_fps_btn,
-            self.ui.fps90_fps_btn
+            self.ui.fps90_fps_btn,
+            self.ui.fps120_fps_btn
         ]
         self.fps_value = self.app.get_fps()
 
@@ -267,7 +268,8 @@ class GFX(QObject):
             self.ui.high_fps_btn,
             self.ui.ultra_fps_btn,
             self.ui.extreme_fps_btn,
-            self.ui.fps90_fps_btn
+            self.ui.fps90_fps_btn,
+            self.ui.fps120_fps_btn
         ]
         for button in buttons:
             button.clicked.connect(lambda checked, btn=button: self.check_button_selected(buttons, btn))
@@ -301,6 +303,7 @@ class GFX(QObject):
             self.ui.ultra_fps_btn,
             self.ui.extreme_fps_btn,
             self.ui.fps90_fps_btn,
+            self.ui.fps120_fps_btn,
             self.ui.classic_style_btn,
             self.ui.colorful_style_btn,
             self.ui.realistic_style_btn,

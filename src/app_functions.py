@@ -710,6 +710,8 @@ class Game(Optimizer):
             self.set_dword("AdbDisable", 0)
             self.adb_enabled = False
             return
+        elif adb_status is None:
+            raise ValueError("Could not get AdbDisable status from registry.")
 
         raise ValueError("Unknown AdbDisable status.")
 
@@ -771,6 +773,7 @@ class Game(Optimizer):
             "Ultra": b"\x05",
             "Extreme": b"\x06",
             "Extreme+": b"\x07",
+            "Ultra Extreme": b"\x08"
         }
         fps_value = fps_mapping.get(val)
 
@@ -826,6 +829,7 @@ class Game(Optimizer):
             b"\x05": "Ultra",
             b"\x06": "Extreme",
             b"\x07": "Extreme+",
+            b"\x08": "Ultra Extreme",
         }
         return fps_dict.get(fps_hex, None)
 

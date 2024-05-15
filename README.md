@@ -41,7 +41,8 @@ You can also choose between:
 *   High
 *   Ultra
 *   Extreme (60 FPS)
-*   **90 FPS**
+*   **Extreme+** (**90 FPS**)
+*   **Ultra Extreme** (**120 FPS**)
 
 ### Optimize Gameloop & PC
 
